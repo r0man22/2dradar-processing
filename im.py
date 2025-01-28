@@ -1,35 +1,54 @@
 import cv2
-import numpy as np
+import sys
 
-# Görüntüyü yükle
-image = cv2.imread('radar.png')
+# Video kaynağını aç
+video = cv2.VideoCapture("radar.mp4")
+if not video.isOpened():
+    print("Video açılmadı.")
+    sys.exit()
 
-# Görüntüyü gri tonlamaya çevir
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+# İlk kareyi oku
+success, frame = video.read()
+if not success:
+    print('Video okuma hatası')
+    sys.exit()
 
-# Görüntüyü bulanıklaştır
-blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+# Pencereyi oluştur
+cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
 
-# Eşikleme ile görüntüyü binary hale getir
-_, thresholded = cv2.threshold(blurred, 127, 255, cv2.THRESH_BINARY)
+# Takip edilecek nesneyi seç
+bbox_object = cv2.selectROI("Video", frame, fromCenter=False, showCrosshair=True)
 
-# Konturları bul
-contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+# İzleme bölgesini seç
+bbox_zone = cv2.selectROI("Video", frame, fromCenter=False, showCrosshair=True)
+cv2.destroyAllWindows()
 
-# Sadece üçgen nesneleri tutmak için boş bir siyah görüntü oluştur
-output_image = np.zeros_like(image)
+# Nesne takipçisini oluştur
+tracker = cv2.TrackerCSRT_create()
+ok = tracker.init(frame, bbox_object)
 
-# Üçgenleri tespit et ve çiz
-for contour in contours:
-    # Konturu düzgünleştir
-    epsilon = 0.04 * cv2.arcLength(contour, True)  # Yaklaşık değer
-    approx = cv2.approxPolyDP(contour, epsilon, True)  # Konturu düzgünleştir
-    
-    # Eğer şekil 3 kenarlıysa, bu bir üçgen olabilir
-    if len(approx) == 3:
-        cv2.drawContours(output_image, [approx], -1, (0, 255, 0), 2)  # Üçgeni yeşil renkte çiz
+# Video çalıştır ve nesneyi takip et
+while True:
+    success, frame = video.read()
+    if not success:
+        break
 
-# Sonuç görüntüsünü göster
-cv2.imshow("Üçgenler", output_image)
-cv2.waitKey(0)
+    ok, bbox_object = tracker.update(frame)
+
+    # Nesneyi çerçeve içine al ve izleme bölgesini göster
+    if ok:
+        (x, y, w, h) = [int(v) for v in bbox_object]
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2, 1)
+        cv2.rectangle(frame, (int(bbox_zone[0]), int(bbox_zone[1])), (int(bbox_zone[0] + bbox_zone[2]), int(bbox_zone[1] + bbox_zone[3])), (0, 255, 0), 2, 1)
+
+        # Nesne izleme bölgesine girerse bildirim ver
+        if (x > bbox_zone[0] and x + w < bbox_zone[0] + bbox_zone[2] and y > bbox_zone[1] and y + h < bbox_zone[1] + bbox_zone[3]):
+            cv2.putText(frame, "Nesne Bolgede!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            print("Bildirim: Nesne izleme bölgesine girdi!")
+
+    cv2.imshow("Video", frame)
+    if cv2.waitKey(1) & 0xFF == 27:  # ESC tuşu ile çıkış
+        break
+
+video.release()
 cv2.destroyAllWindows()
