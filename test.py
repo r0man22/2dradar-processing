@@ -1,72 +1,56 @@
 import cv2
 import numpy as np
 
-# Video dosyasını aç
 video_path = 'radar3.mp4'
 cap = cv2.VideoCapture(video_path)
 
-# İlk frame'i al
 ret, frame = cap.read()
 if not ret:
     print("Video okunamadı.")
     exit()
 
-# Video boyutlarını al
 height, width, _ = frame.shape
 
-# ROI boyutunu hesapla (Ekranın 1/6'sı kadar)
 roi_width = width // 6
 roi_height = height // 6
 
-# ROI'nin yatayda ortada, dikeyde ekranın en altında olmasını sağla
-roi_x = (width - roi_width) // 2  # Yatayda ortada
-roi_y = height - roi_height - 26  # Dikeyde en altta
+roi_x = (width - roi_width) // 2  
+roi_y = height - roi_height - 26  
 
-# Pencereyi küçültme (örneğin, 800x600 boyutuna)
-cv2.namedWindow("Video with ROI", cv2.WINDOW_NORMAL)  # Pencereyi yeniden boyutlandırılabilir yapıyoruz
-cv2.resizeWindow("Video with ROI", 800, 600)  # Pencereyi 800x600 boyutuna ayarlıyoruz
+cv2.namedWindow("Video with ROI", cv2.WINDOW_NORMAL) 
+cv2.resizeWindow("Video with ROI", 800, 600)  
 
-# Video kaydını başlat
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    # 1. Adım: ROI bölgesinin görünmesini sağla (geri kalanını siyah yap)
     roi_frame = frame[roi_y:roi_y + roi_height, roi_x:roi_x + roi_width]
-    masked_frame = np.zeros_like(frame)  # Aynı boyutlarda boş bir çerçeve oluştur
+    masked_frame = np.zeros_like(frame) 
     masked_frame[roi_y:roi_y + roi_height, roi_x:roi_x + roi_width] = roi_frame
 
-    # 2. Adım: ROI'yi gri tonlamaya çevir
     roi_gray = cv2.cvtColor(masked_frame[roi_y:roi_y + roi_height, roi_x:roi_x + roi_width], cv2.COLOR_BGR2GRAY)
     roi_gray_colored = cv2.cvtColor(roi_gray, cv2.COLOR_GRAY2BGR)  # Gri tonlamayı tekrar renkliye çeviriyoruz
     masked_frame[roi_y:roi_y + roi_height, roi_x:roi_x + roi_width] = roi_gray_colored
 
-    # 3. Adım: ROI'nin boyutunu büyüt
     new_roi_width = roi_width * 2  # ROI'yi iki katına çıkartıyoruz
     new_roi_height = roi_height * 2
 
-    # Büyütülmüş ROI'yi yeni boyutlarla yeniden boyutlandır
     roi_resized = cv2.resize(roi_gray_colored, (new_roi_width, new_roi_height))
 
-    # Yine de boyutları birbirine uyumlu hale getirmek için hedef alandaki alanı ayarlıyoruz.
-    # Eğer büyütülmüş ROI ekranın dışına taşarsa, sadece ekran içindeki alanı kullanırız.
     roi_end_x = roi_x + new_roi_width
     roi_end_y = roi_y + new_roi_height
 
-    # Eğer yeni ROI, ekran boyutlarından büyükse, boyutları ayarlayın
     if roi_end_x > width:
         roi_end_x = width
-        roi_resized = cv2.resize(roi_gray_colored, (width - roi_x, new_roi_height))  # X boyutunu sınırladık
+        roi_resized = cv2.resize(roi_gray_colored, (width - roi_x, new_roi_height))  
 
     if roi_end_y > height:
         roi_end_y = height
-        roi_resized = cv2.resize(roi_gray_colored, (new_roi_width, height - roi_y))  # Y boyutunu sınırladık
+        roi_resized = cv2.resize(roi_gray_colored, (new_roi_width, height - roi_y))  
 
-    # ROI'yi maskeleme alanına yerleştir
     masked_frame[roi_y:roi_end_y, roi_x:roi_end_x] = roi_resized
 
-    # Sonuçları göster
     cv2.imshow("Video with ROI", masked_frame)
 
     # 'q' tuşuna basarak çıkış yapabiliriz
